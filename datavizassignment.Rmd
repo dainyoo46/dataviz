@@ -1,0 +1,18 @@
+---
+title: "Dataviz Assignment"
+author: "Dain Yoo"
+date: "9/24/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
+```
+
+## Import Data
+```{r}
+terror <- read_excel("globalterrorism.xlsx")
+ciri <- read_excel("ciridata.xlsx")
+```
