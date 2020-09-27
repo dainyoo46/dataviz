@@ -1,7 +1,7 @@
 ---
 title: "Dataviz Assignment"
 author: "Dain Yoo"
-date: "9/24/2020"
+date: "9/27/2020"
 output: html_document
 ---
 
@@ -9,10 +9,158 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(readxl)
+library(ggplot2)
+library(gridExtra)
+
+terror <- read_excel("globalterrorism.xlsx")
+ciri <- read_csv("ciridata.csv")
 ```
 
-## Import Data
-```{r}
-terror <- read_excel("globalterrorism.xlsx")
-ciri <- read_excel("ciridata.xlsx")
+Broadly, I am interested in the political consequences of Anti-Terror legislation, and in particular how it affects the level of global terrorism attacks and human rights infringement. In this project, I will be using the Global Terrorism Database (1970-2018), the CIRI Human Rights Data Project (1981-2011) and as for now indicators of when Anti-Terrorism legislation was adopted in single countries, which has not been put into a comprehensive dataset yet. The analysis in this assignment is mainly descriptive, as it explores the yearly and regional trends of global terrorism and human rights index and finally how anti-terror legislation rougly fits in these trends in specific cases of interest.
+
+#### Source of Dataset
+[Global Terrorism Database](https://www.start.umd.edu/data-tools/global-terrorism-database-gtd)
+
+[CIRI Human Rights Data Project](http://www.humanrightsdata.com)
+
+
+#### GitHub Repository 
+[CIRI Human Rights Data Project](https://github.com/dainyoo46/dataviz)
+
+
+## Data Visualization (1)
+
+```{r, message=FALSE, warning=FALSE}
+# Create new tibble that adds successful terrorist attacks by year
+
+terror_year <- terror %>%
+  group_by(iyear, region_txt) %>%
+  summarize(sum(success)) 
+
+# Create plot of successful terrorist attacks by region 
+
+ggplot(data = terror_year, aes(x = `iyear`, y = `sum(success)`)) + 
+  geom_line() +
+  geom_point(size = 1) + 
+  facet_wrap(~ region_txt) +
+  labs(title = "Figure 1. Successful Global Terrorist Attacks by Region (1970-2018)",
+       caption = "Data source: Global Terrorism Database") +
+  xlab("Year") + ylab("Number of Attacks") + 
+  theme(plot.title = element_text(size = 13)) + 
+  theme_bw()
 ```
+
+Figure 1 is a descriptive graph of successful global terrorism attacks by subregion during the 1970 - 2018 period. It is noticeable that some regions experience substantially higher level of global terrorism - Middle East and North Africa (MENA), South Asia and Sub-Saharan Africa - whereas others do not. It is also interesting to see that most global terrorist attack emerged in the 2000s, supposedly in the aftermath of the 9/11, which is the most evident in the MENA region. In the next visualization I will look more into the cases in this specific region and observe how the level of human rights violation has changed over time. 
+
+
+## Data Visualization (2)
+
+```{r, message=FALSE, warning=FALSE}
+# Create new tibble that trims period from 2001
+
+ciri_region <- ciri %>%
+  select(CTRY, YEAR, UNREG, UNSUBREG, PHYSINT, NEW_EMPINX, NEW_RELFRE) %>%
+  mutate(REGION = as.character(UNREG)) %>%
+  mutate(DECADE = floor(YEAR/10)*10) %>%
+  mutate(DECADE = as.character(DECADE)) %>%
+  mutate(REGION = recode(REGION,
+                         `2` = "Africa",
+                         `9` = "Oceania",
+                         `21` = "N. America",
+                         `142` = "Asia",
+                         `150` = "Europe",
+                         `419` = "Latin America"))
+
+# Barplot of physical integrity in each UN region category
+
+ggplot(ciri_region, aes(x=REGION, y = PHYSINT, fill = DECADE)) + 
+  geom_boxplot(outlier.alpha = 0.1) + scale_fill_brewer(palette="Blues") + 
+  labs(title = "Figure 2. Human Rights Index by Region",
+       subtitle = "Trend in Physical Integrity Rights Index (Decades)",
+       caption = "Data source: CIRI Human Rights Data Project \
+                  (0 - No Government Respect, 8 - Full government Respect)") +
+  xlab("Region") + ylab("Physical Integrity Rights Index") + 
+  theme(plot.title = element_text(size = 13)) + 
+  theme_bw()
+```
+
+Figure 2 is a descriptive barplot of physical integrity rights index by region. For each region categorized along the x-axis, I group by decades so that one can observe the change in the index by decades from the 1980s to the 2010s. Physical integrity rights index is constructed from the 1) torture, 2) extrajudicial killing, 3) political imprisonment, and 4) disappearance indicators. The lower the index is, the less the government respects such rights. From the graph we observe that physical integrity rights decreased over time in Africa, Asia and interestingy North America. 
+
+There are several factors to notice in understanding the data. First, the dataset contains observations from 1980 to 2011 so the last decade only contains observations for two years. Second, the regional categorization adopted by this dataset is different from the previous dataset that it uses the UN Region and Subregion Identifier. For instance, Middle East and North East is not given its own category but split between Northern Africa and Western Asia. 
+
+
+## Data Visualization (3)
+
+```{r, message=FALSE, warning=FALSE}
+# New tibble with Empowerment Rights Index in Africa and Asia
+
+ciri_focus <- ciri_region %>%
+  filter(UNREG == c(2, 21, 142)) %>%
+  group_by(YEAR, REGION) %>%
+  summarize(mean(PHYSINT, na.rm = TRUE), 
+            mean(NEW_EMPINX, na.rm = TRUE)) %>%
+  rename(PHYSINT = `mean(PHYSINT, na.rm = TRUE)`, 
+         NEW_EMPINX = `mean(NEW_EMPINX, na.rm = TRUE)`)
+  
+
+# Plot line graphs of three regions
+
+p1 <- ggplot(ciri_focus, aes(x=YEAR, y=PHYSINT, 
+                             group = REGION, color = REGION)) + 
+      geom_line() + geom_point(aes(shape = REGION)) +
+      labs(subtitle = "Trend in Physical Integrity Rights Index",
+           caption = "Data source: CIRI Human Rights Data Project") +
+      xlab("Year") + ylab("Physical Integrity Rights Index") + 
+      scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9")) +
+      theme_bw()
+
+p2 <- ggplot(ciri_focus, aes(x=YEAR, y=NEW_EMPINX, 
+                             group = REGION, color = REGION)) + 
+      geom_line() + geom_point(aes(shape = REGION)) +
+      labs(subtitle = "Trend in Empowerment Rights Index",
+           caption = "Data source: CIRI Human Rights Data Project") +
+      xlab("Year") + ylab("Empowerment Rights Index") + 
+      scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9")) +
+      theme_bw()
+
+grid.arrange(p1, p2, nrow = 1, 
+             top = "Figure 3. Human Rights Index in North America, Africa and Asia")
+
+```
+
+From Figure 3, we can see that physical integrity rights index dropped sharp in North America right after 2001, which we can assume that the 9/11 had some impact on the level of torture, extrajudicial killing, political imprisonment or disappearance. We can assume that the Pariots Act (2001) played some role in this drop of human rights index. Meanwhile, both physical integrity rights index and empowerment rights index - an additive index constructed from the Foreign Movement, Domestic Movement, Freedom of Speech, Freedom of Assembly & Association, Workers’ Rights, Electoral Self-Determination, and Freedom of Religion indicator - decreased in Asia and Africa to some degree, although the latter index in Africa seems to increase slightly. Overall, we can assume that the increase of global terrorism is somewhat correlated to the exacerbation of human rights index in these regions. 
+
+
+## Data Visualization (4)
+
+```{r, message=FALSE, warning=FALSE}
+# Effect of anti-terror legislation
+
+ciri_country <- ciri %>%
+  filter(CTRY == c("United States of America", "Jordan", "South Africa")) %>%
+  group_by(YEAR, CTRY) %>%
+  summarise(mean(NEW_EMPINX), mean(PHYSINT)) %>%
+  rename(NEW_EMPINX = "mean(NEW_EMPINX)", PHYSINT = "mean(PHYSINT)")
+
+# Plot Change in Human Rights Index
+
+ggplot(ciri_country, aes(x=YEAR, color = CTRY)) + 
+     geom_line(aes(y=PHYSINT)) +
+     geom_line(aes(y=NEW_EMPINX)) +
+     scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9")) +
+     facet_grid(~ CTRY) + theme_bw() +
+     geom_vline(data=filter(ciri_country, CTRY=="United States of America"),
+              aes(xintercept=2001)) +
+     geom_vline(data=filter(ciri_country,CTRY=="Jordan"), 
+              aes(xintercept=2006)) + 
+     geom_vline(data=filter(ciri_country,CTRY=="South Africa"), 
+              aes(xintercept=2004)) +
+     labs(title = "Figure 4. The Effect of Anti-Terror Law on Human Rights",
+          subtitle = "Trend in Jordan, South Africa and the United States",
+          caption = "Data source: CIRI Human Rights Data Project",
+          color = "Country") +
+      xlab("Year") + ylab("Human Rights Index")
+```
+
+Figure 4 shows when Anti-Terror law was adopted in each states and how the trend of huan rights index changes accordingly. The United States after 2001, Jordan after 2006 and South Africa after 2004 - respectively when each states adopted domestic Anti-Terror law - are followed by a decrease in human rights index. The three states are merely a single case picked from each region and does not necessarily represent the regional pattern. They were chosen because they adopted anti-terror law after 2001 but not too long after, since the time frame of the CIRI Human Rights Database is limited to 2011. Although one cannot conclude that the adoption of Anti-Terror law has a negative effect on human rights practices, one can say there could be a negative correlation which should be further explored by a more systematic research.
+
